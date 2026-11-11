@@ -778,13 +778,17 @@ function drawCard() {
       ${t.category ? `<button class="save rv-yes" data-c="${esc(t.category)}">✓ ${esc(t.category)}</button>` : ''}
       <div class="rv-or">${t.category ? 'or change it to' : 'Pick one'}</div>
       <div class="rv-cats">${order.map(c => `<button data-c="${esc(c)}" style="${tint(catColor(c))}">${emoji(c)} ${esc(c)}</button>`).join('')}</div>
-      <label class="tg sm"><span>Always use this for “${esc(t.merchant)}”</span><input type="checkbox" id="rvRemember"><i></i></label>
+      <label class="tg sm"><span>Always use this for “${esc(t.merchant)}”${(n => n ? ` · fixes ${n} more` : '')(RV.items.filter((x, i) => i > RV.i && x.merchant === t.merchant).length)}</span><input type="checkbox" id="rvRemember"><i></i></label>
     </div>
     <div class="rv-nav"><button id="rvSkip">Skip</button><span class="faint small">swipe → yes · ← skip</span></div>`;
   const decide = c => {
     const card = $('rvCard'); card.classList.add('out-r');
-    google.script.run.withFailureHandler(e => toast(e.message)).apiReview(sess(), { row: t.row, merchant: t.merchant, category: c, clear: true, remember: $('rvRemember').checked });
-    D.reviewItems = D.reviewItems.filter(x => x.row !== t.row); D.review = Math.max(0, D.review - 1); setHeader();
+    const remember = $('rvRemember').checked;
+    google.script.run.withSuccessHandler(r => { if (r && r.alsoFixed) toast(`Also fixed ${r.alsoFixed} more from ${t.merchant}`); })
+      .withFailureHandler(e => toast(e.message)).apiReview(sess(), { row: t.row, merchant: t.merchant, category: c, clear: true, remember });
+    const same = remember ? RV.items.filter((x, i) => i > RV.i && x.merchant === t.merchant).map(x => x.row) : [];
+    RV.items = RV.items.filter((x, i) => i <= RV.i || !same.includes(x.row)); RV.done += same.length;
+    D.reviewItems = D.reviewItems.filter(x => x.row !== t.row && !same.includes(x.row)); D.review = Math.max(0, D.review - 1 - same.length); setHeader();
     RV.done++; setTimeout(() => { RV.i++; drawCard(); }, 260);
   };
   el.querySelectorAll('[data-c]').forEach(b => b.onclick = () => decide(b.dataset.c));
@@ -1470,7 +1474,8 @@ function planPaychecks() {
       ${hist.map(p => `<div class="payrow" ${pk({ title: (p.employer === 'crew' ? 'CREW Carbon' : 'Yale') + ' paycheck · actual', date: p.date, amount: p.net, sign: 1, desc: p.start ? `Worked ${shortD(parseDay(p.start))}–${shortD(parseDay(p.end))}` : '', more: [['Gross', money2(p.gross)], ['Hours', p.hours || ''], ['Federal', p.fed != null ? '−' + money2(p.fed) : ''], ['State', p.state != null ? '−' + money2(p.state) : ''], ['FICA', p.fica != null ? '−' + money2(p.fica) : '']] })} data-pktap="1">${logoAv(p.employer === 'crew' ? 'crew' : 'sas')}<span class="mid"><span class="m">${esc(shortD(parseDay(p.date)))}, ${parseDay(p.date).getFullYear()} · ${p.employer === 'crew' ? 'CREW Carbon' : 'Yale'}</span>
         <span class="s">${p.hours ? p.hours + ' h · ' : ''}${money2(p.gross)} gross${p.start ? ` · ${esc(shortD(parseDay(p.start)))}–${esc(shortD(parseDay(p.end)))}` : ''}</span></span><span class="r"><b class="num">${money2(p.net)}</b><span class="badge">actual</span></span></div>`).join('')}
     </details></section>
-    <div class="glass tip-card">${ibtn('pay')} Tap a paycheck to change its hours or student status. Changes save to the <b>Paycheck Plan</b> tab, and CREW edits also update <b>Crew Takehome Pay</b>. Projections are calibrated to your real paystubs in <b>Pay History</b>.</div>`;
+    <div class="glass tip-card">${ibtn('pay')} Tap a paycheck to change its hours or student status. Changes save to the <b>Paycheck Plan</b> tab, and CREW edits also update <b>Crew Takehome Pay</b>. Projections are calibrated to your real paystubs in <b>Pay History</b>.
+      <br><br><b>Calendars read:</b> ${MD.calendarError ? esc(MD.calendarError) : esc((MD.calendarsRead || []).join(', ') || 'none')}. Shifts count when the title says SAS, CBEY or CREW, or when the calendar itself is named for the job. ${MD.shifts.length} shift${MD.shifts.length === 1 ? '' : 's'} found.</div>`;
   el.querySelectorAll('[data-pay]').forEach(b => b.onclick = () => editPay(M.pays[+b.dataset.pay]));
 }
 function payRow(p) {
